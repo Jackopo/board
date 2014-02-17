@@ -220,8 +220,7 @@ public final class ChessTableBoard1 implements ChessBoard {
 		
 		final boolean whiteActive = this.isWhiteActive();
 		if (this.getKingPosition(whiteActive) < 0) return moves;
-
-		
+				
 		for (int threadIndex = 0; threadIndex < PROCESSOR_COUNT; ++threadIndex) {
 			final int startIndex = threadIndex * sectorWidth + (threadIndex < sectorThreshold ? threadIndex : sectorThreshold);
 			final int stopIndex = startIndex + sectorWidth + (threadIndex < sectorThreshold ? 1 : 0);			
@@ -236,16 +235,17 @@ public final class ChessTableBoard1 implements ChessBoard {
 						for (int i = startIndex; i < stopIndex; ++i) {
 							final ChessPiece piece = pieces[i];
 							
-							if (piece != null && piece.isWhite() == whiteActive)
-								synchronized (moves) {
-								
-									mustCaptureKing = collectMoves(moves, piece, mustCaptureKing);
-								}
-								
+							if (piece != null && piece.isWhite() == whiteActive) {
+								mustCaptureKing = collectMoves(Collections.synchronizedList(moves), piece, mustCaptureKing);
+							}							
 						}
 						
 					} catch (final Throwable exception) {
 						exception.printStackTrace();
+						if (exception instanceof Error) throw (Error) exception;
+						if (exception instanceof RuntimeException) throw (RuntimeException) exception;
+						if (exception != null) throw new AssertionError();
+
 					} finally {
 						indebtedSemaphore.release();
 					}

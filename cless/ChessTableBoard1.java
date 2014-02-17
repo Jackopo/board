@@ -37,8 +37,8 @@ public final class ChessTableBoard1 implements ChessBoard {
 	private volatile short whiteKingPosition;
 	private volatile short blackKingPosition;
 	private static final int PROCESSOR_COUNT = Runtime.getRuntime().availableProcessors();
-	private static final ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(PROCESSOR_COUNT);
-	
+	private static final ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(PROCESSOR_COUNT, new DaemonThreadFactory());
+
 	/**
 	 * Creates an empty chess board with default dimension.
 	 */
@@ -88,11 +88,11 @@ public final class ChessTableBoard1 implements ChessBoard {
 		this((byte) pieceMatrix.length, (byte) (pieceMatrix.length == 0 ? 0 : pieceMatrix[0].length));
 
 		if (
-			pieceMatrix.length > Byte.MAX_VALUE | pieceMatrix[0].length > Byte.MAX_VALUE |
-			moveClock < 0 | reversibleMoveClock < 0 |
-			passingPawnPosition < -1 | passingPawnPosition >= this.rankCount * this.fileCount |
-			castlingAbilities.length != 4
-		) throw new IllegalArgumentException();
+				pieceMatrix.length > Byte.MAX_VALUE | pieceMatrix[0].length > Byte.MAX_VALUE |
+				moveClock < 0 | reversibleMoveClock < 0 |
+				passingPawnPosition < -1 | passingPawnPosition >= this.rankCount * this.fileCount |
+				castlingAbilities.length != 4
+				) throw new IllegalArgumentException();
 
 		this.moveClock = moveClock;
 		this.reversibleMoveClock = reversibleMoveClock;
@@ -212,54 +212,76 @@ public final class ChessTableBoard1 implements ChessBoard {
 	 */
 	public List<short[]> getActiveMoves () {
 		final List<short[]> moves = new ArrayList<>(256);
+		final List<short[]> checkMateMoves = new ArrayList<>(256);
+			
+		final boolean whiteActive = this.isWhiteActive();
+		if (this.getKingPosition(whiteActive) < 0) return moves;
 		
-		final DaemonThreadFactory factory = new DaemonThreadFactory();
 		final Semaphore indebtedSemaphore = new Semaphore(1 - PROCESSOR_COUNT);
 		final int sectorWidth = pieces.length / PROCESSOR_COUNT;
 		final int sectorThreshold = pieces.length % PROCESSOR_COUNT;
 		
-		final boolean whiteActive = this.isWhiteActive();
-		if (this.getKingPosition(whiteActive) < 0) return moves;
-				
 		for (int threadIndex = 0; threadIndex < PROCESSOR_COUNT; ++threadIndex) {
 			final int startIndex = threadIndex * sectorWidth + (threadIndex < sectorThreshold ? threadIndex : sectorThreshold);
 			final int stopIndex = startIndex + sectorWidth + (threadIndex < sectorThreshold ? 1 : 0);			
-				
 			
+
 			final Runnable runnable = new Runnable() {
-				private boolean mustCaptureKing = false;
 				@Override
 				public void run() {
-					
+					boolean mustCaptureKing = false;
+
 					try {
 						for (int i = startIndex; i < stopIndex; ++i) {
 							final ChessPiece piece = pieces[i];
-							
-							if (piece != null && piece.isWhite() == whiteActive) {
-								mustCaptureKing = collectMoves(Collections.synchronizedList(moves), piece, mustCaptureKing);
+
+							if (piece != null && piece.isWhite() == whiteActive ) {
+								synchronized (moves) {
+								
+									mustCaptureKing = collectMoves(moves, piece, mustCaptureKing);
+									if (mustCaptureKing) {
+										// very poor implementation, but it works
+										synchronized (checkMateMoves) {
+									
+											boolean temp = false;
+											temp = collectMoves(checkMateMoves, piece, temp);
+											mustCaptureKing = false;
+											// I don't get why this implementation doesn't work :(
+//											checkMateMoves.addAll(moves);
+//											mustCaptureKing = false;
+										}
+									}
+								}
+									
 							}							
 						}
-						
+
 					} catch (final Throwable exception) {
 						exception.printStackTrace();
 						if (exception instanceof Error) throw (Error) exception;
+						if (exception instanceof NullPointerException) throw (NullPointerException) exception; //not important
 						if (exception instanceof RuntimeException) throw (RuntimeException) exception;
 						if (exception != null) throw new AssertionError();
 
 					} finally {
 						indebtedSemaphore.release();
 					}
-					
+
 				}
-				
+
 			};
-		
-			EXECUTOR_SERVICE.execute(factory.newThread(runnable));
+
+			EXECUTOR_SERVICE.execute(runnable);
 		}
-		
+
 		indebtedSemaphore.acquireUninterruptibly();
-		
-		return moves;
+		if (!checkMateMoves.isEmpty()) {
+			return checkMateMoves;
+
+		} else {
+			
+			return moves;
+		}
 	}
 
 
@@ -282,11 +304,11 @@ public final class ChessTableBoard1 implements ChessBoard {
 	public short[] getPositions (final boolean any, final Boolean white, final ChessPieceType type) {
 		if (type == ChessPieceType.KING) {
 			if (white != null) return white
-				? (this.whiteKingPosition == -1 ? new short[0] : new short[] { this.whiteKingPosition })
-				: (this.blackKingPosition == -1 ? new short[0] : new short[] { this.blackKingPosition });
+					? (this.whiteKingPosition == -1 ? new short[0] : new short[] { this.whiteKingPosition })
+							: (this.blackKingPosition == -1 ? new short[0] : new short[] { this.blackKingPosition });
 
-			if (this.whiteKingPosition != -1 & this.blackKingPosition != -1) return new short[] { this.whiteKingPosition, this.blackKingPosition };
-			return new short[] { this.whiteKingPosition != -1 ? this.whiteKingPosition : this.blackKingPosition };
+					if (this.whiteKingPosition != -1 & this.blackKingPosition != -1) return new short[] { this.whiteKingPosition, this.blackKingPosition };
+					return new short[] { this.whiteKingPosition != -1 ? this.whiteKingPosition : this.blackKingPosition };
 		}
 
 		if (any) {
@@ -350,119 +372,119 @@ public final class ChessTableBoard1 implements ChessBoard {
 		this.moveClock += 1;
 
 		switch (movePositions.length) {
-			case 3: {
-				final int kingSourcePosition = movePositions[0];
-				final int rookSourcePosition = movePositions[1];
-				final int kingSinkPosition = movePositions[2];
-				final int rookSinkPosition = kingSinkPosition + ((rookSourcePosition - kingSourcePosition) >>> 31 << 1) - 1;
-				if (this.pieces[kingSourcePosition] != activePieceValues[ChessPieceType.KING.ordinal()][kingSourcePosition]) throw new IllegalArgumentException();
-				if (this.pieces[rookSourcePosition] != activePieceValues[ChessPieceType.ROOK.ordinal()][rookSourcePosition]) throw new IllegalArgumentException();
+		case 3: {
+			final int kingSourcePosition = movePositions[0];
+			final int rookSourcePosition = movePositions[1];
+			final int kingSinkPosition = movePositions[2];
+			final int rookSinkPosition = kingSinkPosition + ((rookSourcePosition - kingSourcePosition) >>> 31 << 1) - 1;
+			if (this.pieces[kingSourcePosition] != activePieceValues[ChessPieceType.KING.ordinal()][kingSourcePosition]) throw new IllegalArgumentException();
+			if (this.pieces[rookSourcePosition] != activePieceValues[ChessPieceType.ROOK.ordinal()][rookSourcePosition]) throw new IllegalArgumentException();
 
-				this.setKingPosition(whiteActive, (short) kingSinkPosition);
-				this.pieces[kingSourcePosition] = null;
-				this.pieces[rookSourcePosition] = null;
-				this.pieces[kingSinkPosition] = activePieceValues[ChessPieceType.KING.ordinal()][kingSinkPosition];
-				this.pieces[rookSinkPosition] = activePieceValues[ChessPieceType.ROOK.ordinal()][rookSinkPosition];
-				this.castlingAbilities &= whiteActive
+			this.setKingPosition(whiteActive, (short) kingSinkPosition);
+			this.pieces[kingSourcePosition] = null;
+			this.pieces[rookSourcePosition] = null;
+			this.pieces[kingSinkPosition] = activePieceValues[ChessPieceType.KING.ordinal()][kingSinkPosition];
+			this.pieces[rookSinkPosition] = activePieceValues[ChessPieceType.ROOK.ordinal()][rookSinkPosition];
+			this.castlingAbilities &= whiteActive
 					? ~(MASK_CASTLE_WHITE_LEFT | MASK_CASTLE_WHITE_RIGHT)
-					: ~(MASK_CASTLE_BLACK_LEFT | MASK_CASTLE_BLACK_RIGHT);
-				this.reversibleMoveClock = 0;
-				return;
-			}
-			case 2: {
-				final short sourcePosition = movePositions[0];
-				final short sinkPosition = movePositions[1];
-				final ChessPiece sourcePiece = this.pieces[sourcePosition];
-				final ChessPiece capturePiece = this.pieces[sinkPosition];
-				if (sourcePiece == null || sourcePiece.isWhite() != whiteActive) throw new IllegalArgumentException();
+							: ~(MASK_CASTLE_BLACK_LEFT | MASK_CASTLE_BLACK_RIGHT);
+					this.reversibleMoveClock = 0;
+					return;
+		}
+		case 2: {
+			final short sourcePosition = movePositions[0];
+			final short sinkPosition = movePositions[1];
+			final ChessPiece sourcePiece = this.pieces[sourcePosition];
+			final ChessPiece capturePiece = this.pieces[sinkPosition];
+			if (sourcePiece == null || sourcePiece.isWhite() != whiteActive) throw new IllegalArgumentException();
 
-				ChessPieceType sourceType = sourcePiece.getType();
-				switch (sourceType) {
-					case PAWN: {
-						if (capturePiece == null) {
-							if (sinkPosition == passingPawnPosition) {
-								final int capturePosition = sinkPosition + (sinkPosition > sourcePosition ? -this.fileCount : this.fileCount);
-								this.pieces[capturePosition] = null;
-							} else {
-								final int doubleFileCount = this.fileCount << 1;
-								final int difference = sourcePosition - sinkPosition;
+			ChessPieceType sourceType = sourcePiece.getType();
+			switch (sourceType) {
+			case PAWN: {
+				if (capturePiece == null) {
+					if (sinkPosition == passingPawnPosition) {
+						final int capturePosition = sinkPosition + (sinkPosition > sourcePosition ? -this.fileCount : this.fileCount);
+						this.pieces[capturePosition] = null;
+					} else {
+						final int doubleFileCount = this.fileCount << 1;
+						final int difference = sourcePosition - sinkPosition;
 
-								if (doubleFileCount == difference | doubleFileCount == -difference) {
-									passingPawnPosition = (short) ((sourcePosition + sinkPosition) >> 1);
-									final ChessPiece[] passivePawns = passivePieceValues[ChessPieceType.PAWN.ordinal()];
+						if (doubleFileCount == difference | doubleFileCount == -difference) {
+							passingPawnPosition = (short) ((sourcePosition + sinkPosition) >> 1);
+							final ChessPiece[] passivePawns = passivePieceValues[ChessPieceType.PAWN.ordinal()];
 
-									for (int offset = -1; offset <= 1; offset += 2) {
-										final ChessPiece neighbor = passivePawns[sinkPosition + offset];
-										if (this.pieces[neighbor.getPosition()] == neighbor && BitArrays.get(neighbor.getSinkPositionBitBoard(), passingPawnPosition)) {
-											this.passingPawnPosition = passingPawnPosition;
-											break;
-										}
-									}
+							for (int offset = -1; offset <= 1; offset += 2) {
+								final ChessPiece neighbor = passivePawns[sinkPosition + offset];
+								if (this.pieces[neighbor.getPosition()] == neighbor && BitArrays.get(neighbor.getSinkPositionBitBoard(), passingPawnPosition)) {
+									this.passingPawnPosition = passingPawnPosition;
+									break;
 								}
 							}
 						}
-
-						if (sinkPosition < this.fileCount | sinkPosition >= this.pieces.length - this.fileCount) 
-							sourceType = ChessPieceType.QUEEN;
-						this.reversibleMoveClock = 0;
-						break;
 					}
+				}
 
-					case ROOK: {
-						if (whiteActive) {
-							if (sourcePosition == 0) this.castlingAbilities &= ~MASK_CASTLE_WHITE_LEFT;
-							else if (sourcePosition == this.fileCount - 1) this.castlingAbilities &= ~MASK_CASTLE_WHITE_RIGHT;
-						} else {
-							if (sourcePosition == this.pieces.length - this.fileCount) this.castlingAbilities &= ~MASK_CASTLE_BLACK_LEFT;
-							else if (sourcePosition == this.pieces.length - 1) this.castlingAbilities &= ~MASK_CASTLE_BLACK_RIGHT;
-						}
-						break;
-					}
+				if (sinkPosition < this.fileCount | sinkPosition >= this.pieces.length - this.fileCount) 
+					sourceType = ChessPieceType.QUEEN;
+				this.reversibleMoveClock = 0;
+				break;
+			}
 
-					case KING: {
-						this.castlingAbilities &= whiteActive
-							? ~(MASK_CASTLE_WHITE_LEFT | MASK_CASTLE_WHITE_RIGHT)
-							: ~(MASK_CASTLE_BLACK_LEFT | MASK_CASTLE_BLACK_RIGHT);
+			case ROOK: {
+				if (whiteActive) {
+					if (sourcePosition == 0) this.castlingAbilities &= ~MASK_CASTLE_WHITE_LEFT;
+					else if (sourcePosition == this.fileCount - 1) this.castlingAbilities &= ~MASK_CASTLE_WHITE_RIGHT;
+				} else {
+					if (sourcePosition == this.pieces.length - this.fileCount) this.castlingAbilities &= ~MASK_CASTLE_BLACK_LEFT;
+					else if (sourcePosition == this.pieces.length - 1) this.castlingAbilities &= ~MASK_CASTLE_BLACK_RIGHT;
+				}
+				break;
+			}
+
+			case KING: {
+				this.castlingAbilities &= whiteActive
+						? ~(MASK_CASTLE_WHITE_LEFT | MASK_CASTLE_WHITE_RIGHT)
+								: ~(MASK_CASTLE_BLACK_LEFT | MASK_CASTLE_BLACK_RIGHT);
 						this.setKingPosition(whiteActive, sinkPosition);
 						break;
-					}
-
-					default: {
-						break;
-					}
-				}
-
-				if (capturePiece != null) {
-					if (capturePiece.isWhite() == whiteActive) throw new IllegalArgumentException();
-
-					switch (capturePiece.getType()) {
-						case KING:
-							this.castlingAbilities &= whiteActive
-								? ~(MASK_CASTLE_BLACK_LEFT | MASK_CASTLE_BLACK_RIGHT)
-								: ~(MASK_CASTLE_WHITE_LEFT | MASK_CASTLE_WHITE_RIGHT);
-							this.setKingPosition(!whiteActive, (short) -1);
-							break;
-						case ROOK:
-							if (whiteActive) {
-								if (sinkPosition == this.pieces.length - this.fileCount) this.castlingAbilities &= ~MASK_CASTLE_BLACK_LEFT;
-								else if (sinkPosition == this.pieces.length - 1) this.castlingAbilities &= ~MASK_CASTLE_BLACK_RIGHT;
-							} else {
-								if (sinkPosition == 0) this.castlingAbilities &= ~MASK_CASTLE_WHITE_LEFT;
-								else if (sinkPosition == this.fileCount - 1) this.castlingAbilities &= ~MASK_CASTLE_WHITE_RIGHT;
-							}
-							break;
-						default:
-							break;
-					}
-					this.reversibleMoveClock = 0;
-				}
-
-				this.pieces[sourcePosition] = null;
-				this.pieces[sinkPosition] = activePieceValues[sourceType.ordinal()][sinkPosition];
-				return;
 			}
-			default:
-				throw new IllegalArgumentException();
+
+			default: {
+				break;
+			}
+			}
+
+			if (capturePiece != null) {
+				if (capturePiece.isWhite() == whiteActive) throw new IllegalArgumentException();
+
+				switch (capturePiece.getType()) {
+				case KING:
+					this.castlingAbilities &= whiteActive
+					? ~(MASK_CASTLE_BLACK_LEFT | MASK_CASTLE_BLACK_RIGHT)
+							: ~(MASK_CASTLE_WHITE_LEFT | MASK_CASTLE_WHITE_RIGHT);
+					this.setKingPosition(!whiteActive, (short) -1);
+					break;
+				case ROOK:
+					if (whiteActive) {
+						if (sinkPosition == this.pieces.length - this.fileCount) this.castlingAbilities &= ~MASK_CASTLE_BLACK_LEFT;
+						else if (sinkPosition == this.pieces.length - 1) this.castlingAbilities &= ~MASK_CASTLE_BLACK_RIGHT;
+					} else {
+						if (sinkPosition == 0) this.castlingAbilities &= ~MASK_CASTLE_WHITE_LEFT;
+						else if (sinkPosition == this.fileCount - 1) this.castlingAbilities &= ~MASK_CASTLE_WHITE_RIGHT;
+					}
+					break;
+				default:
+					break;
+				}
+				this.reversibleMoveClock = 0;
+			}
+
+			this.pieces[sourcePosition] = null;
+			this.pieces[sinkPosition] = activePieceValues[sourceType.ordinal()][sinkPosition];
+			return;
+		}
+		default:
+			throw new IllegalArgumentException();
 		}
 	}
 
@@ -713,13 +735,13 @@ public final class ChessTableBoard1 implements ChessBoard {
 			final ChessPiece piece = this.pieces[sinkPosition];
 			if (piece != null && piece.isWhite() == white) {
 				switch (piece.getType()) {
-					case KNIGHT:
-					case CHANCELLOR:
-					case ARCHBISHOP:
-					case EMPRESS:
-						return true;
-					default:
-						break;
+				case KNIGHT:
+				case CHANCELLOR:
+				case ARCHBISHOP:
+				case EMPRESS:
+					return true;
+				default:
+					break;
 				}
 			}
 		}
@@ -734,19 +756,19 @@ public final class ChessTableBoard1 implements ChessBoard {
 
 				if (piece.isWhite() == white) {
 					switch (piece.getType()) {
-						case BISHOP:
-						case ARCHBISHOP:
-						case QUEEN:
-						case EMPRESS:
-							return true;
-						case KING:
-							if (index == 0) return true;
-							break;
-						case PAWN:
-							if (index == 0 & (white ^ position < sinkPosition)) return true;
-							break;
-						default:
-							break;
+					case BISHOP:
+					case ARCHBISHOP:
+					case QUEEN:
+					case EMPRESS:
+						return true;
+					case KING:
+						if (index == 0) return true;
+						break;
+					case PAWN:
+						if (index == 0 & (white ^ position < sinkPosition)) return true;
+						break;
+					default:
+						break;
 					}
 				}
 				break;
@@ -763,16 +785,16 @@ public final class ChessTableBoard1 implements ChessBoard {
 
 				if (piece.isWhite() == white) {
 					switch (piece.getType()) {
-						case ROOK:
-						case CHANCELLOR:
-						case QUEEN:
-						case EMPRESS:
-							return true;
-						case KING:
-							if (index == 0) return true;
-							break;
-						default:
-							break;
+					case ROOK:
+					case CHANCELLOR:
+					case QUEEN:
+					case EMPRESS:
+						return true;
+					case KING:
+						if (index == 0) return true;
+						break;
+					default:
+						break;
 					}
 				}
 				break;

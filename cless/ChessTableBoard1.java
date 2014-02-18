@@ -213,18 +213,18 @@ public final class ChessTableBoard1 implements ChessBoard {
 	public List<short[]> getActiveMoves () {
 		final List<short[]> moves = new ArrayList<>(256);
 		final List<short[]> checkMateMoves = new ArrayList<>(256);
-			
+
 		final boolean whiteActive = this.isWhiteActive();
 		if (this.getKingPosition(whiteActive) < 0) return moves;
-		
+
 		final Semaphore indebtedSemaphore = new Semaphore(1 - PROCESSOR_COUNT);
 		final int sectorWidth = pieces.length / PROCESSOR_COUNT;
 		final int sectorThreshold = pieces.length % PROCESSOR_COUNT;
-		
+
 		for (int threadIndex = 0; threadIndex < PROCESSOR_COUNT; ++threadIndex) {
 			final int startIndex = threadIndex * sectorWidth + (threadIndex < sectorThreshold ? threadIndex : sectorThreshold);
 			final int stopIndex = startIndex + sectorWidth + (threadIndex < sectorThreshold ? 1 : 0);			
-			
+
 
 			final Runnable runnable = new Runnable() {
 				@Override
@@ -237,22 +237,22 @@ public final class ChessTableBoard1 implements ChessBoard {
 
 							if (piece != null && piece.isWhite() == whiteActive ) {
 								synchronized (moves) {
-								
+
 									mustCaptureKing = collectMoves(moves, piece, mustCaptureKing);
 									if (mustCaptureKing) {
 										// very poor implementation, but it works
 										synchronized (checkMateMoves) {
-									
+
 											boolean temp = false;
 											temp = collectMoves(checkMateMoves, piece, temp);
 											mustCaptureKing = false;
 											// I don't get why this implementation doesn't work :(
-//											checkMateMoves.addAll(moves);
-//											mustCaptureKing = false;
+											//											checkMateMoves.addAll(moves);
+											//											mustCaptureKing = false;
 										}
 									}
 								}
-									
+
 							}							
 						}
 
@@ -279,7 +279,7 @@ public final class ChessTableBoard1 implements ChessBoard {
 			return checkMateMoves;
 
 		} else {
-			
+
 			return moves;
 		}
 	}

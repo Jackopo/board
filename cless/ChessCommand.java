@@ -31,7 +31,7 @@ public final class ChessCommand {
 		final String xfen = args[1];
 
 		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer();
-		final Board<ChessPieceType> board = ChessXfenCodec.decode(ChessTableBoard1.class, xfen);
+		final Board<ChessPieceType> board = ChessXfenCodec.decode(ChessTableBoard.class, xfen);
 
 		System.out.println(board.toString());
 		final long before = System.currentTimeMillis();

@@ -30,8 +30,8 @@ public final class ChessCommand {
 		final int searchDepth = Integer.parseInt(args[0]);
 		final String xfen = args[1];
 
-		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer();
-		final Board<ChessPieceType> board = ChessXfenCodec.decode(ChessTableBoard1.class, xfen);
+		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer2();
+		final Board<ChessPieceType> board = ChessXfenCodec.decode(ChessTableBoard.class, xfen);
 
 		System.out.println(board.toString());
 		final long before = System.currentTimeMillis();

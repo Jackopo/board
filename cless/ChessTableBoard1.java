@@ -247,8 +247,8 @@ public final class ChessTableBoard1 implements ChessBoard {
 											temp = collectMoves(checkMateMoves, piece, temp);
 											mustCaptureKing = false;
 											// I don't get why this implementation doesn't work :(
-											//											checkMateMoves.addAll(moves);
-											//											mustCaptureKing = false;
+//											checkMateMoves.addAll(moves);
+//											mustCaptureKing = false;
 										}
 									}
 								}

@@ -239,16 +239,14 @@ public final class ChessTableBoard1 implements ChessBoard {
 								synchronized (moves) {
 
 									mustCaptureKing = collectMoves(moves, piece, mustCaptureKing);
+									
 									if (mustCaptureKing) {
-										// very poor implementation, but it works
+										
 										synchronized (checkMateMoves) {
 
-											boolean temp = false;
-											temp = collectMoves(checkMateMoves, piece, temp);
+											
+											checkMateMoves.addAll(moves);
 											mustCaptureKing = false;
-											// I don't get why this implementation doesn't work :(
-//											checkMateMoves.addAll(moves);
-//											mustCaptureKing = false;
 										}
 									}
 								}

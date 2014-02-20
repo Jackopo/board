@@ -14,6 +14,8 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import de.htw.ds.board.Board;
 import de.htw.ds.board.MovePrediction;
@@ -22,15 +24,12 @@ import de.sb.javase.sync.DaemonThreadFactory;
 
 public class ChessAnalyzer2b extends ChessAnalyzer {
 	private static final int PROCESSOR_COUNT = Runtime.getRuntime().availableProcessors();
-	private static ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(PROCESSOR_COUNT);
+	private static ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(PROCESSOR_COUNT, new DaemonThreadFactory());
 
 	public MovePrediction predictMoves (final Board<ChessPieceType> board, final int depth) {
 		
-		if (EXECUTOR_SERVICE.isShutdown()) EXECUTOR_SERVICE = Executors.newFixedThreadPool(PROCESSOR_COUNT); 
-		
 		MovePrediction mp = predictMovesMultiThreaded(board, depth);
-		EXECUTOR_SERVICE.shutdown();
-		
+
 		return  mp;
 	}
 
@@ -43,12 +42,16 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 		final Set<Future<List<MovePrediction>>> futures = new HashSet<>();
 
 		final Collection<short[]> moves = board.getActiveMoves();
+		
+		// iteration through the moves collection
 		for (final short[] move : moves) {
 			
 			final Callable<List<MovePrediction>> callable = doMultiThreading(move, alternatives,  board, depth);
-
-			futures.add(EXECUTOR_SERVICE.submit(callable));
+			futures.add(EXECUTOR_SERVICE.submit(callable));			
+			
 		}
+		
+		// iteration throudh the futures collection where the result of the alternatives is 
 
 		for (final Future<List<MovePrediction>> tempFuture : futures) {
 
@@ -57,20 +60,21 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 				while (true) {
 					try {
 						alternatives = tempFuture.get();
+						
 						break;
-					} catch (final InterruptedException interrupt) {}
+					} catch (final InterruptedException interrupt) {
+						Logger.getGlobal().log(Level.WARNING, interrupt.getMessage(), interrupt);
+					}
 				}
 			} catch (final ExecutionException exception) {
 				final Throwable cause = exception.getCause();
 				if (cause instanceof Error) throw (Error) cause;
 				if (cause instanceof RuntimeException) throw (RuntimeException) cause;
-			
-				if (cause instanceof InterruptedException) throw new ThreadDeath();
-
 				throw new AssertionError();
 			} 
 		}
-
+			
+		
 		if (alternatives.isEmpty()) { // distinguish check mate and stale mate
 			final short[] activeKingPositions = board.getPositions(true, whiteActive, ChessPieceType.KING);
 			final boolean kingCheckedOrMissing = activeKingPositions.length == 0 ? true : board.isPositionThreatened(activeKingPositions[0]);
@@ -81,6 +85,7 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 				movePrediction.getMoves().add(null);
 			return movePrediction;
 		}
+		
 		return alternatives.get(ThreadLocalRandom.current().nextInt(alternatives.size()));
 	}
 
@@ -91,7 +96,7 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 
 
 		final Callable<List<MovePrediction>> callable = new Callable<List<MovePrediction>>() {
-			public List<MovePrediction> call () throws InterruptedException {
+			public List<MovePrediction> call() throws InterruptedException {
 				final MovePrediction movePrediction;
 				final Piece<ChessPieceType> capturePiece = board.getPiece(move[1]);
 				if (capturePiece != null && capturePiece.isWhite() != whiteActive && capturePiece.getType() == ChessPieceType.KING) {

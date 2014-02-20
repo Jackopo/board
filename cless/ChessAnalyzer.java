@@ -52,7 +52,7 @@ public class ChessAnalyzer implements Analyzer<ChessPieceType> {
 
 		final Collection<short[]> moves = board.getActiveMoves();
 		for (final short[] move : moves) {
-
+			// create and calculated the  MovePrediction
 			final MovePrediction movePrediction;
 			final Piece<ChessPieceType> capturePiece = board.getPiece(move[1]);
 			if (capturePiece != null && capturePiece.isWhite() != whiteActive && capturePiece.getType() == ChessPieceType.KING) {
@@ -76,7 +76,7 @@ public class ChessAnalyzer implements Analyzer<ChessPieceType> {
 					movePrediction.getMoves().add(move);
 				}
 			}
-
+			// the just now created MovePrediction is compared with the best alternative
 			final int comparison = compareMovePredictions(whiteActive, movePrediction, alternatives.isEmpty() ? null : alternatives.get(0));
 			if (comparison > 0) alternatives.clear();
 			if (comparison >= 0) alternatives.add(movePrediction);

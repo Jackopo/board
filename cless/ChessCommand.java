@@ -1,6 +1,8 @@
 package de.htw.ds.board.cless;
 
 import java.util.Arrays;
+import java.util.logging.LogManager;
+
 import de.htw.ds.board.Board;
 import de.htw.ds.board.MovePrediction;
 import de.htw.ds.board.Analyzer;
@@ -27,10 +29,11 @@ public final class ChessCommand {
 	 * @see ChessXfenCodec#decode(String,String)
 	 */
 	static public void main (final String[] args) {
+		LogManager.getLogManager();
 		final int searchDepth = Integer.parseInt(args[0]);
 		final String xfen = args[1];
 
-		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer2b();
+		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer();
 		final Board<ChessPieceType> board = ChessXfenCodec.decode(ChessTableBoard.class, xfen);
 
 		System.out.println(board.toString());

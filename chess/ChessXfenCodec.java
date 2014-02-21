@@ -1,4 +1,4 @@
-package de.htw.ds.board.cless;
+package de.htw.ds.board.chess;
 
 import java.io.StringWriter;
 import java.lang.reflect.Constructor;

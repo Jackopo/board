@@ -1,4 +1,4 @@
-package de.htw.ds.board.cless;
+package de.htw.ds.board.chess;
 
 import java.util.Arrays;
 import de.htw.ds.board.Board;

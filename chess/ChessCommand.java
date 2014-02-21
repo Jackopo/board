@@ -1,4 +1,4 @@
-package de.htw.ds.board.cless;
+package de.htw.ds.board.chess;
 
 import java.util.Arrays;
 import java.util.logging.LogManager;
@@ -33,7 +33,7 @@ public final class ChessCommand {
 		final int searchDepth = Integer.parseInt(args[0]);
 		final String xfen = args[1];
 
-		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer();
+		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer2();
 		final Board<ChessPieceType> board = ChessXfenCodec.decode(ChessTableBoard.class, xfen);
 
 		System.out.println(board.toString());

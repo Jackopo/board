@@ -1,4 +1,4 @@
-package de.htw.ds.board.cless;
+package de.htw.ds.board.chess;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -10,10 +10,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -22,15 +19,13 @@ import de.htw.ds.board.MovePrediction;
 import de.htw.ds.board.Piece;
 import de.sb.javase.sync.DaemonThreadFactory;
 
-public class ChessAnalyzer2b extends ChessAnalyzer {
+public class ChessAnalyzer2 extends ChessAnalyzer {
 	private static final int PROCESSOR_COUNT = Runtime.getRuntime().availableProcessors();
 	private static ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(PROCESSOR_COUNT, new DaemonThreadFactory());
 
 	public MovePrediction predictMoves (final Board<ChessPieceType> board, final int depth) {
 		
-		MovePrediction mp = predictMovesMultiThreaded(board, depth);
-
-		return  mp;
+		return predictMovesMultiThreaded(board, depth);
 	}
 
 	static protected final MovePrediction predictMovesMultiThreaded (final Board<ChessPieceType> board, final int depth) {
@@ -39,28 +34,31 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 
 		List<MovePrediction> alternatives = new ArrayList<>();
 		final boolean whiteActive = board.isWhiteActive();
-		final Set<Future<List<MovePrediction>>> futures = new HashSet<>();
+		final Set<Future<MovePrediction>> futures = new HashSet<>();
 
 		final Collection<short[]> moves = board.getActiveMoves();
 		
 		// iteration through the moves collection
 		for (final short[] move : moves) {
 			
-			final Callable<List<MovePrediction>> callable = doMultiThreading(move, alternatives,  board, depth);
+			Callable<MovePrediction> callable =  createCallable(move, board, depth);			
 			futures.add(EXECUTOR_SERVICE.submit(callable));			
-			
+		
 		}
 		
-		// iteration throudh the futures collection where the result of the alternatives is 
+		// iteration through the futures collection where the result of the alternatives is 
 
-		for (final Future<List<MovePrediction>> tempFuture : futures) {
+		for (final Future<MovePrediction> tempFuture : futures) {
 
 			try {
 			
 				while (true) {
 					try {
-						alternatives = tempFuture.get();
-						
+						MovePrediction movePrediction = tempFuture.get();
+						final int comparison = compareMovePredictions(whiteActive, movePrediction, alternatives.isEmpty() ? null : alternatives.get(0));
+						if (comparison > 0) alternatives.clear();
+						if (comparison >= 0) alternatives.add(movePrediction);
+
 						break;
 					} catch (final InterruptedException interrupt) {
 						Logger.getGlobal().log(Level.WARNING, interrupt.getMessage(), interrupt);
@@ -89,14 +87,13 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 		return alternatives.get(ThreadLocalRandom.current().nextInt(alternatives.size()));
 	}
 
-	private static Callable<List<MovePrediction>> doMultiThreading(final short[] move, 
-			final List<MovePrediction> alternatives, final Board<ChessPieceType> board,final int depth) {
+	private static Callable<MovePrediction> createCallable(final short[] move, final Board<ChessPieceType> board,final int depth) {
 
 		final boolean whiteActive = board.isWhiteActive();
 
 
-		final Callable<List<MovePrediction>> callable = new Callable<List<MovePrediction>>() {
-			public List<MovePrediction> call() throws InterruptedException {
+		final Callable<MovePrediction> callable = new Callable<MovePrediction>()  {
+			public MovePrediction call() throws InterruptedException {
 				final MovePrediction movePrediction;
 				final Piece<ChessPieceType> capturePiece = board.getPiece(move[1]);
 				if (capturePiece != null && capturePiece.isWhite() != whiteActive && capturePiece.getType() == ChessPieceType.KING) {
@@ -112,7 +109,7 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 						final short[] counterMove = movePrediction.getMoves().get(0);
 						if (counterMove != null) {
 							final Piece<ChessPieceType> recapturePiece = boardClone.getPiece(counterMove[1]);
-							if (recapturePiece != null && recapturePiece.isWhite() == whiteActive && recapturePiece.getType() == ChessPieceType.KING) return alternatives;
+							if (recapturePiece != null && recapturePiece.isWhite() == whiteActive && recapturePiece.getType() == ChessPieceType.KING) return movePrediction;
 						}
 						movePrediction.getMoves().add(0, move);
 					} else {
@@ -121,12 +118,9 @@ public class ChessAnalyzer2b extends ChessAnalyzer {
 						movePrediction.getMoves().add(move);
 					}
 				}
-
-				final int comparison = compareMovePredictions(whiteActive, movePrediction, alternatives.isEmpty() ? null : alternatives.get(0));
-				if (comparison > 0) alternatives.clear();
-				if (comparison >= 0) alternatives.add(movePrediction);
-
-				return alternatives;
+				
+				return movePrediction;
+				
 			}
 		};
 

@@ -1,4 +1,4 @@
-package de.htw.ds.board.cless;
+package de.htw.ds.board.chess;
 
 import de.htw.ds.board.PieceType;
 import de.sb.javase.TypeMetadata;

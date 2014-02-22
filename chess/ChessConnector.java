@@ -7,13 +7,15 @@ import java.util.Properties;
 
 import javax.sql.DataSource;
 
+import com.mysql.jdbc.PreparedStatement;
+
 import de.htw.ds.shop.ShopConnector;
 import de.sb.javase.sql.JdbcConnectionMonitor;
 
 public class ChessConnector implements AutoCloseable {
 	
 	static private final String SQL_INSERT_MOVE = "INSERT INTO chess.openingMove VALUES (0, ?, ?, ?, ?, ?)";
-	static private final String SQL_SELECT_MOVES = "SELECT * FROM chess.openingMove where position=? AND source=?  AND sink=? AND rating=? and searchDepth=?";
+	static private final String SQL_SELECT_MOVES = "SELECT * FROM chess.openingMove where position=? AND source=? AND sink=? AND rating=? and searchDepth=?";
 	private final Connection connection;
 	static private final DataSource DATA_SOURCE;
 	static {
@@ -51,9 +53,6 @@ public class ChessConnector implements AutoCloseable {
 
 	}
 
-	public boolean createDatabse() {
-		
-		return false;
-	}
+
 
 }

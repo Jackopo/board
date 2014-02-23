@@ -22,7 +22,12 @@ import de.sb.javase.sync.DaemonThreadFactory;
 public class ChessAnalyzer2 extends ChessAnalyzer {
 	private static final int PROCESSOR_COUNT = Runtime.getRuntime().availableProcessors();
 	private static ExecutorService EXECUTOR_SERVICE = Executors.newFixedThreadPool(PROCESSOR_COUNT, new DaemonThreadFactory());
-
+	
+	
+	public ChessAnalyzer2() {
+		super();
+	}
+	
 	public MovePrediction predictMoves (final Board<ChessPieceType> board, final int depth) {
 		
 		return predictMovesMultiThreaded(board, depth);

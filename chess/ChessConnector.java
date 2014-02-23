@@ -109,7 +109,7 @@ public class ChessConnector implements AutoCloseable {
 	}
 
 	
-	public void putMovePrediction( String xfen, short searchDepth, MovePrediction movePrediction) throws SQLException {
+	public void putMovePrediction( String xfen, short searchDepth, MovePrediction movePrediction) {
 		// null or value-ranges not good
 		if ((xfen == null) || (searchDepth < 1 ) || (movePrediction == null)) {
 			return;
@@ -125,6 +125,9 @@ public class ChessConnector implements AutoCloseable {
 						deleteMovePrediction(resultSet.getLong("identity"));						
 					}					
 				}					
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			}
 		}
 			
@@ -137,6 +140,9 @@ public class ChessConnector implements AutoCloseable {
 				statement.setInt(4, movePrediction.getRating());
 				statement.setInt(5, searchDepth);
 				if(statement.executeUpdate() != 1)  throw new IllegalStateException("failed to insert move!");				
+			} catch (SQLException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
 			} 
 		}
 		

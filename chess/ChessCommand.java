@@ -33,7 +33,7 @@ public final class ChessCommand {
 		final int searchDepth = Integer.parseInt(args[0]);
 		final String xfen = args[1];
 
-		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer2();
+		final Analyzer<ChessPieceType> analyzer = new ChessAnalyzer();
 		final Board<ChessPieceType> board = ChessXfenCodec.decode(ChessTableBoard.class, xfen);
 
 		System.out.println(board.toString());

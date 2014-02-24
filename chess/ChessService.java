@@ -14,10 +14,10 @@ public interface ChessService {
 	MovePrediction[] getMovePredictions(
 			@WebParam(name= "xfen") String xfen,
 			@WebParam(name="searchDepth") short searchDepth) throws SQLException;
-	//@Oneway
+	@Oneway
 	void putMovePrediction (
 			@WebParam(name= "xfen") String xfen,
 			@WebParam(name="searchDepth") short searchDepth,
-			@WebParam(name="movePrediction") MovePrediction movePrediction) throws SQLException;
+			@WebParam(name="movePrediction") MovePrediction movePrediction);
 
 }

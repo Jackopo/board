@@ -3,6 +3,15 @@ package de.htw.ds.board;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlType;
+
+
 import de.sb.javase.TypeMetadata;
 
 
@@ -11,10 +20,16 @@ import de.sb.javase.TypeMetadata;
  * predicted moves considering best play by both sides, and the board rating after performing said
  * sequence.
  */
+@XmlType
+@XmlRootElement
+@XmlAccessorType(XmlAccessType.FIELD)
 @TypeMetadata(copyright = "2013-2014 Sascha Baumeister, all rights reserved", version = "0.1.0", authors = "Sascha Baumeister")
 public class MovePrediction {
-
+	
+	@XmlAttribute
 	private final int rating;
+	
+	@XmlElement
 	private final List<short[]> moves;
 
 
@@ -22,6 +37,7 @@ public class MovePrediction {
 	 * Creates a new instance with the given projected rating.
 	 * @param rating the predicted board rating in cents
 	 */
+	
 	public MovePrediction (final int rating) {
 		super();
 
@@ -29,7 +45,14 @@ public class MovePrediction {
 		this.moves = new LinkedList<>();
 	}
 
-
+	public MovePrediction() {
+		super();
+		
+		this.rating = 0;
+		this.moves = null;
+		
+		
+	}
 	/**
 	 * Returns the predicted board rating.
 	 * @return the predicted board rating, in cents

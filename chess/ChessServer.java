@@ -81,7 +81,7 @@ public class ChessServer implements ChessService, AutoCloseable {
 
 	
 	public void putMovePrediction( String xfen, short searchDepth, MovePrediction movePrediction)  {
-		
+		System.out.println("IN connector " + movePrediction.getMoves());
 		synchronized (this.jdbcConnector.getConnection()) {
 			try {
 				this.jdbcConnector.putMovePrediction(xfen,searchDepth, movePrediction);

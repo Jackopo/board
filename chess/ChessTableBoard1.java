@@ -264,20 +264,15 @@ public final class ChessTableBoard1 implements ChessBoard {
 					} finally {
 						indebtedSemaphore.release();
 					}
-
 				}
-
 			};
-
 			EXECUTOR_SERVICE.execute(runnable);
 		}
 
 		indebtedSemaphore.acquireUninterruptibly();
 		if (!checkMateMoves.isEmpty()) {
 			return checkMateMoves;
-
 		} else {
-
 			return moves;
 		}
 	}

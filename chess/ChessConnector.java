@@ -1,17 +1,16 @@
 package de.htw.ds.board.chess;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
+
 
 import javax.sql.DataSource;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import javax.sql.DataSource;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 
@@ -22,13 +21,11 @@ import de.htw.ds.board.MovePrediction;
 import de.sb.javase.sql.JdbcConnectionMonitor;
 
 public class ChessConnector implements AutoCloseable {
-	
+
 	static private final String SQL_INSERT_MOVE = "INSERT INTO OpeningMove (position, source, sink, rating, searchDepth) VALUES ( ?, ?, ?, ?, ?)";
-	static private final String SQL_SELECT_MOVES = "SELECT * FROM OpeningMove WHERE position = ? AND source = ? AND sink = ? AND rating = ? and searchDepth = ?";
-	static private final String SQL_SELECT_BETTER_OR_EQUAL_MOVES = "SELECT * FROM OpeningMove WHERE position=? AND searchDepth >= ?";
-	static private final String SQL_SELECT_BETTER_MOVES = "SELECT * FROM OpeningMove WHERE position=? AND searchDepth > ?";
+	static private final String SQL_SELECT_BETTER_OR_EQUAL_MOVES = "SELECT * FROM OpeningMove WHERE position=? AND searchDepth >= ? ORDER BY identity";
 	static private final String SQL_SELECT_WORST_MOVES = "SELECT * FROM OpeningMove WHERE position=? AND searchDepth < ?";
-	static private final String SQL_DELETE_MOVE = "DELETE * FROM OpeningMove WHERE identity=?";
+	static private final String SQL_DELETE_MOVE = "DELETE FROM OpeningMove WHERE identity=?";
 	private final Connection connection;
 	static private final DataSource DATA_SOURCE;
 	static {
@@ -49,8 +46,8 @@ public class ChessConnector implements AutoCloseable {
 			throw new ExceptionInInitializerError(exception);
 		}
 	}
-	
-	
+
+
 	public ChessConnector() throws SQLException {
 		this.connection = DATA_SOURCE.getConnection();
 
@@ -59,7 +56,7 @@ public class ChessConnector implements AutoCloseable {
 		thread.setDaemon(true);
 		thread.start();
 	}
-	
+
 	/**
 	 * Returns the JDBC connection to allow external synchronization and transaction handling.
 	 * @return the JDBC connection
@@ -67,59 +64,67 @@ public class ChessConnector implements AutoCloseable {
 	public Connection getConnection () {
 		return this.connection;
 	}
-	
+
 	@Override
 	public void close() throws SQLException {
 		this.connection.close();
 	}
-	
+
 	public MovePrediction[] getMovePredictions (String xfen, short searchDepth) throws SQLException {
 		if ((xfen == null) || (searchDepth < 1 ) || (searchDepth == 0)) {
 			return null;
 		}
-		
+
 		List<MovePrediction> movePredictions = new ArrayList<MovePrediction>();
-		
+
 		synchronized(this.connection)  {
 			try (PreparedStatement statement = this.connection.prepareStatement(SQL_SELECT_BETTER_OR_EQUAL_MOVES)) {
 				statement.setString(1, xfen);
 				statement.setInt(2, searchDepth);
-				
+
 				try (ResultSet resultSet = statement.executeQuery()) {
+					int rating = 0;
+					List<short[]> moves = new ArrayList<short[]>();
 					while(resultSet.next()) {
-						MovePrediction movePrediction = new MovePrediction(resultSet.getInt("rating"));
-						short[] move = {resultSet.getShort("source"), resultSet.getShort("sink")};
-						movePrediction.getMoves().add(move);
-						movePredictions.add(movePrediction);
+						rating = resultSet.getInt("rating");
+						moves.add(new short[]{resultSet.getShort("source"), resultSet.getShort("sink")});
 					}
-					
+					if (moves.size() > 0) {
+						MovePrediction movePrediction = new MovePrediction(rating);
+						movePrediction.getMoves().addAll(moves);
+						movePredictions.add(movePrediction);
+						
+						
+					}
 				}
-					
+
 			}
 		}		
 		if (movePredictions.size() == 0) {
 			MovePrediction[] mp = {};
 			return mp;
 		} else {
-			
+
 			MovePrediction[] mp = movePredictions.toArray(new MovePrediction[movePredictions.size()]);
 			return mp;
 		}
-		
+
 	}
 
-	
+
 	public void putMovePrediction( String xfen, short searchDepth, MovePrediction movePrediction) {
 		// null or value-ranges not good
 		if ((xfen == null) || (searchDepth < 1 ) || (movePrediction == null)) {
 			return;
 		}
 		
+		
+		
 		synchronized(this.connection)  {
 			try (PreparedStatement statement = this.connection.prepareStatement(SQL_SELECT_WORST_MOVES)) {
 				statement.setString(1, xfen);
 				statement.setInt(2, searchDepth);
-				
+
 				try (ResultSet resultSet = statement.executeQuery()) {
 					while(resultSet.next()) {
 						deleteMovePrediction(resultSet.getLong("identity"));						
@@ -130,38 +135,42 @@ public class ChessConnector implements AutoCloseable {
 				e.printStackTrace();
 			}
 		}
-			
-		synchronized (this.connection) {
-			try (PreparedStatement statement = this.connection.prepareStatement(SQL_INSERT_MOVE)) {
-				short[] move = movePrediction.getMoves().get(0);
-				statement.setString(1, xfen);
-				statement.setShort(2, move[0]);
-				statement.setShort(3, move[1]);
-				statement.setInt(4, movePrediction.getRating());
-				statement.setInt(5, searchDepth);
-				if(statement.executeUpdate() != 1)  throw new IllegalStateException("failed to insert move!");				
-			} catch (SQLException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} 
+
+		for (short[] move : movePrediction.getMoves()) {
+			synchronized (this.connection) {
+				try (PreparedStatement statement = this.connection.prepareStatement(SQL_INSERT_MOVE)) {
+					//short[] move = movePrediction.getMoves().get(0);
+					statement.setString(1, xfen);
+					statement.setShort(2, move[0]);
+					statement.setShort(3, move[1]);
+					statement.setInt(4, movePrediction.getRating());
+					statement.setInt(5, searchDepth);
+					if(statement.executeUpdate() != 1)  throw new IllegalStateException("failed to insert move!");				
+				} catch (SQLException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} 
+			}
 		}
-		
+
 	}
-	
-	
-	
-	
+
+
+
+
 	public long deleteMovePrediction(long identity) throws SQLException {
-		
+
+		System.out.println("identity " + identity);
+
 		synchronized (this.connection) {
 			try (PreparedStatement statement = this.connection.prepareStatement(SQL_DELETE_MOVE)) {
 				statement.setLong(1, identity);
-				if (statement.executeUpdate() != 1) throw new IllegalStateException("customer removal failed.");
+				if (statement.executeUpdate() != 1) throw new IllegalStateException("moveprediction removal failed.");
 			}
 		}
-		
+
 		return identity;
 	}
-	
+
 
 }

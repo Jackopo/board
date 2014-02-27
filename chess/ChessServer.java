@@ -1,8 +1,11 @@
 package de.htw.ds.board.chess;
 
 import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.ServerSocket;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.SQLException;
@@ -18,9 +21,11 @@ public class ChessServer implements ChessService, AutoCloseable {
 	private final URI serviceURI;
 	private final Endpoint endpoint;
 	private final ChessConnector jdbcConnector;
+
+
 	
 	
-	public ChessServer(final int servicePort, final String serviceName) throws SQLException {
+	public ChessServer(final int servicePort, final String serviceName) throws SQLException, IOException {
 		super();
 		
 		
@@ -33,12 +38,14 @@ public class ChessServer implements ChessService, AutoCloseable {
 		}
 
 		this.jdbcConnector = new ChessConnector();
+		/* for the START TRANSACTION command in jdbc */
 		this.jdbcConnector.getConnection().setAutoCommit(false);
 
 		
 		// important
 		this.endpoint = Endpoint.create(SOAPBinding.SOAP11HTTP_BINDING, this);
 		this.endpoint.publish(this.serviceURI.toASCIIString());
+		
 		
 	}
 	
@@ -81,7 +88,7 @@ public class ChessServer implements ChessService, AutoCloseable {
 
 	
 	public void putMovePrediction( String xfen, short searchDepth, MovePrediction movePrediction)  {
-		System.out.println("IN connector " + movePrediction.getMoves());
+			
 		synchronized (this.jdbcConnector.getConnection()) {
 			try {
 				this.jdbcConnector.putMovePrediction(xfen,searchDepth, movePrediction);
@@ -108,15 +115,25 @@ public class ChessServer implements ChessService, AutoCloseable {
 		final long timestamp = System.currentTimeMillis();
 		final int servicePort = Integer.parseInt(args[0]);
 		final String serviceName = args[1];
-
-
+		final int stopPort = Integer.parseInt(args[2]);
+		
+		
+		
 		try (ChessServer server = new ChessServer(servicePort, serviceName)) {
 			System.out.println("Dynamic (bottom-up) JAX-WS shop server running, enter \"quit\" to stop.");
 			System.out.format("Service URI is \"%s\".\n", server.getServiceURI());
 			System.out.format("Startup time is %sms.\n", System.currentTimeMillis() - timestamp);
-
+			ServerSocket serviceSocket = new ServerSocket(stopPort);
 			final BufferedReader charSource = new BufferedReader(new InputStreamReader(System.in));
-			while (!"quit".equals(charSource.readLine()));
+			
+			final DataOutputStream dataOutputStream = new DataOutputStream(serviceSocket.accept().getOutputStream());
+			final DataInputStream dataInputStream = new DataInputStream(serviceSocket.accept().getInputStream());
+			
+			
+			while (true) {
+				System.out.println(dataInputStream.readUTF());
+			}
+			
 		}
 	}
 

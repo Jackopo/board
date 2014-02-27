@@ -39,18 +39,18 @@ public class MovePrediction {
 	 */
 	
 	public MovePrediction (final int rating) {
-		super();
-
+		
 		this.rating = rating;
 		this.moves = new LinkedList<>();
 	}
-
+	
+	
+	/* constructor for marshaling  */
 	public MovePrediction() {
 		super();
 		
 		this.rating = 0;
-		this.moves = null;
-		
+		this.moves = null;	
 		
 	}
 	/**

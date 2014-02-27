@@ -14,7 +14,7 @@ import de.htw.ds.shop.ShopService;
 import de.sb.javase.xml.Namespaces;
 
 public class ChessAnalyzer3 extends ChessAnalyzer {
-	private static final String SERVICE_URL = "http://laptop:8001/ChessService";
+	private static final String SERVICE_URL = "http://antani:8001/ChessService";
 	public ChessAnalyzer3() {
 		super();
 	}

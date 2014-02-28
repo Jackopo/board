@@ -1,14 +1,20 @@
 package de.htw.ds.board.chess;
 
-import java.io.BufferedReader;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.net.ProtocolException;
 import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.SQLException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
 import javax.jws.WebService;
 import javax.xml.ws.Endpoint;
 import javax.xml.ws.soap.SOAPBinding;
@@ -17,18 +23,20 @@ import de.sb.javase.io.SocketAddress;
 
 @WebService(endpointInterface="de.htw.ds.board.chess.ChessService", serviceName="ChessService")
 public class ChessServer implements ChessService, AutoCloseable {
-	
+
 	private final URI serviceURI;
 	private final Endpoint endpoint;
 	private final ChessConnector jdbcConnector;
 
 
-	
-	
+	private  final static String PROTOCOL_IDENTIFIER = "CSP";
+	private  static boolean stop = false;
+
+
 	public ChessServer(final int servicePort, final String serviceName) throws SQLException, IOException {
 		super();
-		
-		
+
+
 		if (servicePort <= 0 | servicePort > 0xFFFF) throw new IllegalArgumentException();
 
 		try {
@@ -41,14 +49,14 @@ public class ChessServer implements ChessService, AutoCloseable {
 		/* for the START TRANSACTION command in jdbc */
 		this.jdbcConnector.getConnection().setAutoCommit(false);
 
-		
+
 		// important
 		this.endpoint = Endpoint.create(SOAPBinding.SOAP11HTTP_BINDING, this);
 		this.endpoint.publish(this.serviceURI.toASCIIString());
-		
-		
+
+
 	}
-	
+
 	public URI getServiceURI () {
 		return this.serviceURI;
 	}
@@ -67,8 +75,8 @@ public class ChessServer implements ChessService, AutoCloseable {
 
 	@Override
 	public MovePrediction[] getMovePredictions(String xfen,short searchDepth) throws SQLException {
-		
-		
+
+
 		synchronized (this.jdbcConnector.getConnection()) {
 			try {
 				final MovePrediction[] movePredictions = this.jdbcConnector.getMovePredictions(xfen,searchDepth);
@@ -83,12 +91,12 @@ public class ChessServer implements ChessService, AutoCloseable {
 				throw exception;
 			}
 		}
-		
+
 	}
 
-	
+
 	public void putMovePrediction( String xfen, short searchDepth, MovePrediction movePrediction)  {
-			
+
 		synchronized (this.jdbcConnector.getConnection()) {
 			try {
 				this.jdbcConnector.putMovePrediction(xfen,searchDepth, movePrediction);
@@ -100,40 +108,124 @@ public class ChessServer implements ChessService, AutoCloseable {
 				} catch (final Exception nestedException) {
 					exception.addSuppressed(nestedException);
 				}
-				
+
 			}
 		}
 
 	}
-	
+
+
+	private static void stopServer( final ServerSocket serverSocket, final int stopPort, final String stopPassword) throws Throwable {
+		//final ExecutorService executor = Executors.newFixedThreadPool(1);
+		try {
+			final Socket connection;
+
+			try {
+				connection = serverSocket.accept();
+			} catch (SocketException e) {
+				e.printStackTrace();
+				return;
+			}
+			try {
+				final Runnable runnable = new Runnable() {
+					public void run() {
+						try {
+							
+							final DataOutputStream dataOutputStream = new DataOutputStream(connection.getOutputStream());
+							final DataInputStream dataInputStream = new DataInputStream(connection.getInputStream());
+
+							// verify and acknowledge protocol
+							for (final char character : PROTOCOL_IDENTIFIER.toCharArray()) {
+								if (dataInputStream.readChar() != character) throw new ProtocolException();
+							}
+							dataOutputStream.writeChars(PROTOCOL_IDENTIFIER);
+							
+
+							final String password = dataInputStream.readUTF();
+
+							if (stopPassword.equals(password)) {
+								stop = true;
+								dataOutputStream.writeUTF("ok");
+								
+							}else {
+								dataOutputStream.writeUTF("fail");
+								
+							}
+							
+						} catch (Throwable e) {
+							e.printStackTrace();
+							try { e.printStackTrace(); } catch (final Throwable nestedException) {}
+						} 
+					}
+				};
+
+				
+//				executor.execute(runnable);
+				Thread thread = new Thread(runnable, "stop");
+				thread.setDaemon(false);
+				thread.start();
+				Thread.sleep(1000);
+
+			} catch (final Throwable exception) {
+				exception.printStackTrace();
+				try { exception.printStackTrace(); } catch (final Throwable nestedException) {
+					nestedException.printStackTrace();
+				}
+				try { connection.close(); } catch (final Throwable nestedException) {
+					nestedException.printStackTrace();
+				}
+				throw exception;
+			}
+//			executor.shutdown();
+//			executor.awaitTermination(10L, TimeUnit.MILLISECONDS);
+
+		} catch (final Throwable exception) {
+			exception.printStackTrace();
+		}
+		
+		if(!stop) stopServer(serverSocket, stopPort, stopPassword);
+		
+	}
 
 	/**
 	 * @param args
+	 * @throws Throwable 
 	 */
-	public static void main(String[] args) throws SQLException, URISyntaxException, IOException {
-		
+	public static void main(String[] args) throws Throwable {
+
 		final long timestamp = System.currentTimeMillis();
 		final int servicePort = Integer.parseInt(args[0]);
 		final String serviceName = args[1];
 		final int stopPort = Integer.parseInt(args[2]);
-		
-		
-		
+		final String stopPassword = args[3];
+
 		try (ChessServer server = new ChessServer(servicePort, serviceName)) {
+
+			ServerSocket serverSocket = new ServerSocket(stopPort);
 			System.out.println("Dynamic (bottom-up) JAX-WS shop server running, enter \"quit\" to stop.");
 			System.out.format("Service URI is \"%s\".\n", server.getServiceURI());
 			System.out.format("Startup time is %sms.\n", System.currentTimeMillis() - timestamp);
-			ServerSocket serviceSocket = new ServerSocket(stopPort);
-			final BufferedReader charSource = new BufferedReader(new InputStreamReader(System.in));
+			System.out.println(stop);
 			
-			final DataOutputStream dataOutputStream = new DataOutputStream(serviceSocket.accept().getOutputStream());
-			final DataInputStream dataInputStream = new DataInputStream(serviceSocket.accept().getInputStream());
+			//do {
+				
+				stopServer(serverSocket, stopPort, stopPassword);
+			//} while (!stop);
 			
-			
-			while (true) {
-				System.out.println(dataInputStream.readUTF());
+
+			if(stop) {
+				System.out.println("Houton We are stopping!");
+				System.out.format("Server received shutdown request on port %s.\n", stopPort);
+				System.out.println("Shutting down....\n");
+				server.close();
+				System.exit(0);
+			} else {
+				System.out.println("not good");
 			}
-			
+				
+
+
+
 		}
 	}
 

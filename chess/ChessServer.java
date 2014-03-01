@@ -27,6 +27,7 @@ public class ChessServer implements ChessService, AutoCloseable {
 	private final URI serviceURI;
 	private final Endpoint endpoint;
 	private final ChessConnector jdbcConnector;
+	
 
 
 	private  final static String PROTOCOL_IDENTIFIER = "CSP";
@@ -160,11 +161,14 @@ public class ChessServer implements ChessService, AutoCloseable {
 				};
 
 				
-//				executor.execute(runnable);
-				Thread thread = new Thread(runnable, "stop");
-				thread.setDaemon(false);
-				thread.start();
-				Thread.sleep(1000);
+				//executor.execute(runnable);
+				
+				Thread t = new Thread(runnable, "stop");
+				t.setDaemon(false);
+				t.start();
+				
+				while (t.isAlive());
+				
 
 			} catch (final Throwable exception) {
 				exception.printStackTrace();
@@ -181,10 +185,7 @@ public class ChessServer implements ChessService, AutoCloseable {
 
 		} catch (final Throwable exception) {
 			exception.printStackTrace();
-		}
-		
-		if(!stop) stopServer(serverSocket, stopPort, stopPassword);
-		
+		}		
 	}
 
 	/**
@@ -207,10 +208,10 @@ public class ChessServer implements ChessService, AutoCloseable {
 			System.out.format("Startup time is %sms.\n", System.currentTimeMillis() - timestamp);
 			System.out.println(stop);
 			
-			//do {
+			do {
 				
 				stopServer(serverSocket, stopPort, stopPassword);
-			//} while (!stop);
+			} while (!stop);
 			
 
 			if(stop) {
@@ -222,10 +223,6 @@ public class ChessServer implements ChessService, AutoCloseable {
 			} else {
 				System.out.println("not good");
 			}
-				
-
-
-
 		}
 	}
 

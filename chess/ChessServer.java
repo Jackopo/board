@@ -1,6 +1,7 @@
 package de.htw.ds.board.chess;
 
 
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -132,7 +133,7 @@ public class ChessServer implements ChessService, AutoCloseable {
 					public void run() {
 						try {
 							
-							final DataOutputStream dataOutputStream = new DataOutputStream(connection.getOutputStream());
+							final DataOutputStream dataOutputStream = new DataOutputStream(new BufferedOutputStream(connection.getOutputStream()));
 							final DataInputStream dataInputStream = new DataInputStream(connection.getInputStream());
 
 							// verify and acknowledge protocol
@@ -140,17 +141,17 @@ public class ChessServer implements ChessService, AutoCloseable {
 								if (dataInputStream.readChar() != character) throw new ProtocolException();
 							}
 							dataOutputStream.writeChars(PROTOCOL_IDENTIFIER);
-							
+							dataOutputStream.flush();
 
 							final String password = dataInputStream.readUTF();
 
 							if (stopPassword.equals(password)) {
 								stop = true;
 								dataOutputStream.writeUTF("ok");
-								
+								dataOutputStream.flush();
 							}else {
 								dataOutputStream.writeUTF("fail");
-								
+								dataOutputStream.flush();
 							}
 							
 						} catch (Throwable e) {
@@ -203,19 +204,17 @@ public class ChessServer implements ChessService, AutoCloseable {
 		try (ChessServer server = new ChessServer(servicePort, serviceName)) {
 
 			ServerSocket serverSocket = new ServerSocket(stopPort);
-			System.out.println("Dynamic (bottom-up) JAX-WS shop server running, enter \"quit\" to stop.");
+			System.out.println("Dynamic (bottom-up) JAX-WS shop server running");
 			System.out.format("Service URI is \"%s\".\n", server.getServiceURI());
 			System.out.format("Startup time is %sms.\n", System.currentTimeMillis() - timestamp);
-			System.out.println(stop);
-			
-			do {
-				
+		
+			do {				
 				stopServer(serverSocket, stopPort, stopPassword);
 			} while (!stop);
 			
 
 			if(stop) {
-				System.out.println("Houton We are stopping!");
+				System.out.println("Houston we are stopping!");
 				System.out.format("Server received shutdown request on port %s.\n", stopPort);
 				System.out.println("Shutting down....\n");
 				server.close();

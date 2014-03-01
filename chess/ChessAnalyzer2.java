@@ -33,7 +33,7 @@ public class ChessAnalyzer2 extends ChessAnalyzer {
 		return predictMovesMultiThreaded(board, depth);
 	}
 
-	static protected final MovePrediction predictMovesMultiThreaded (final Board<ChessPieceType> board, final int depth) {
+	protected final MovePrediction predictMovesMultiThreaded (final Board<ChessPieceType> board, final int depth) {
 		if (depth <= 0) throw new IllegalArgumentException();
 
 
@@ -92,7 +92,7 @@ public class ChessAnalyzer2 extends ChessAnalyzer {
 		return alternatives.get(ThreadLocalRandom.current().nextInt(alternatives.size()));
 	}
 
-	private static Callable<MovePrediction> createCallable(final short[] move, final Board<ChessPieceType> board,final int depth) {
+	private  Callable<MovePrediction> createCallable(final short[] move, final Board<ChessPieceType> board,final int depth) {
 
 		final boolean whiteActive = board.isWhiteActive();
 

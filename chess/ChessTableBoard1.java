@@ -10,6 +10,7 @@ import java.util.concurrent.Semaphore;
 
 import de.htw.ds.board.Board;
 import de.htw.ds.board.PositionalPiece;
+import de.sb.javase.Reference;
 import de.sb.javase.Reflection;
 import de.sb.javase.TypeMetadata;
 import de.sb.javase.sync.DaemonThreadFactory;
@@ -208,19 +209,70 @@ public final class ChessTableBoard1 implements ChessBoard {
 
 
 	/**
-	 * {@inheritDoc}
+	 *   System: AMD Athlon 64 X2 Dual-Core Processor TK-57 × 2 
+	 * 		
+	 * 	 ------ xfen: rckcr/ppppp/5/5/5/5/PPPPP/RCKCR w KQkq - 0 1 -------
+	 * 
+	 *   Single Threaded Implementierung:
+	 *         
+	 *   Suchetiefe 4: 772ms, 654ms, 695ms, 686ms, 695ms -> 700.4 ms
+	 * 
+	 *   Suchetiefe 5: 1980ms, 2030ms, 1970ms, 2063ms, 2017ms -> 2012 ms
+	 * 
+	 *   Suchetiefe 6: 20546ms, 21071ms, 20962ms, 20807ms, 20606ms -> 20798.4 ms
+	 *   
+	 *   
+	 *   Multi Threaded Implementierung:
+	 *   
+	 *   Suchetiefe 4: 1099ms, 1175ms, 1101ms, 1351ms, 1148ms -> 1174.8 ms - Verlust: ~ 68%
+	 *   
+	 *   Suchetiefe 5: 4768ms, 4662ms, 4731ms, 4707ms, 4785ms -> 4730.6 - Verlust:  ~135%
+	 *   
+	 *   Suchetiefe 6: 66954ms, 65638ms, 64874ms, 64887ms, 63770ms -> 65224 ms - Verlust: ~ 213.60%
+	 *   
+	 *   ------ xfen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	 *   
+	 *   Single Threaded Implementierung:
+	 *   
+	 *   Suchetiefe 4: 806ms
+	 *   
+	 *   Suchetiefe 5: 5898ms
+	 *   
+	 *   Suchetiefe 6: 128195ms
+	 *   
+	 *   Multi Threaded Implementierung:
+	 *   
+	 *   Suchetiefe 4: 1666ms -> 106%
+	 *   
+	 *   Suchetiefe 5: 13805ms -> 134%
+	 *   
+	 *   Suchetiefe 6: 316327ms -> 146%
+	 *   
+	 *    
+	 *  Wir gehen davon aus, dass sich die Vektorprozessierung ab einer Anzahl von 4 Kernen trotz höherer
+	 *  Fixkosten sowie  Kosten für erzeugen und zerstören von Threads lohnen wird.
+	 *  
+	 *  Bergündung
+	 *  Der skalierungsfaktor der ursprünglichen Single threadimplementierung ohne Vektorprozessierung ist immer 1 ( 1 system, 1 task)
+	 *  Während ist der Skalierungsfaktor der Multi-Threadedimplementierung mit Vektorprozessierung ist 2/8 (2 Systeme, 8 Task - mit 16 Figuren). 
+	 *  Aber mit einer 
+	 *  Mit 4 Kerne wird die Skalierungsfaktor 4/4 sein. 
+	 *  Wir können beobachten, dass je mehr die 
+	 * 
 	 */
 	public List<short[]> getActiveMoves () {
 		final List<short[]> moves = new ArrayList<>(256);
+		final List<short[]> syncMoves = Collections.synchronizedList(moves);
 		final List<short[]> checkMateMoves = new ArrayList<>(256);
+		final List<short[]> syncCheckMateMoves =  Collections.synchronizedList(checkMateMoves);
 
 		final boolean whiteActive = this.isWhiteActive();
-		if (this.getKingPosition(whiteActive) < 0) return moves;
+		if (this.getKingPosition(whiteActive) < 0) return syncMoves;
 
 		final Semaphore indebtedSemaphore = new Semaphore(1 - PROCESSOR_COUNT);
 		final int sectorWidth = pieces.length / PROCESSOR_COUNT;
 		final int sectorThreshold = pieces.length % PROCESSOR_COUNT;
-
+		final Reference<Throwable> exceptionReference = new Reference<>();
 		for (int threadIndex = 0; threadIndex < PROCESSOR_COUNT; ++threadIndex) {
 			final int startIndex = threadIndex * sectorWidth + (threadIndex < sectorThreshold ? threadIndex : sectorThreshold);
 			final int stopIndex = startIndex + sectorWidth + (threadIndex < sectorThreshold ? 1 : 0);			
@@ -236,15 +288,13 @@ public final class ChessTableBoard1 implements ChessBoard {
 							final ChessPiece piece = pieces[i];
 
 							if (piece != null && piece.isWhite() == whiteActive ) {
-								synchronized (moves) {
+								synchronized (syncMoves) {
 
 									mustCaptureKing = collectMoves(moves, piece, mustCaptureKing);
 									
 									if (mustCaptureKing) {
 										
-										synchronized (checkMateMoves) {
-
-											
+										synchronized (syncCheckMateMoves) {											
 											checkMateMoves.addAll(moves);
 											mustCaptureKing = false;
 										}
@@ -256,11 +306,6 @@ public final class ChessTableBoard1 implements ChessBoard {
 
 					} catch (final Throwable exception) {
 						exception.printStackTrace();
-						if (exception instanceof Error) throw (Error) exception;
-						if (exception instanceof NullPointerException) throw (NullPointerException) exception; //not important
-						if (exception instanceof RuntimeException) throw (RuntimeException) exception;
-						if (exception != null) throw new AssertionError();
-
 					} finally {
 						indebtedSemaphore.release();
 					}
@@ -270,6 +315,13 @@ public final class ChessTableBoard1 implements ChessBoard {
 		}
 
 		indebtedSemaphore.acquireUninterruptibly();
+		
+		final Throwable exception = exceptionReference.get();
+		if (exception instanceof Error) throw (Error) exception;
+		if (exception instanceof RuntimeException) throw (RuntimeException) exception;
+		if (exception instanceof InterruptedException) Thread.currentThread().interrupt();
+		if (exception != null) throw new AssertionError();
+		
 		if (!checkMateMoves.isEmpty()) {
 			return checkMateMoves;
 		} else {

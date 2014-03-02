@@ -3,14 +3,12 @@ package de.htw.ds.board.chess;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.sql.SQLException;
-import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
-
 import javax.xml.ws.Service;
-
+import javax.xml.ws.WebServiceException;
 import de.htw.ds.board.Board;
 import de.htw.ds.board.MovePrediction;
-import de.htw.ds.shop.ShopService;
+
 import de.sb.javase.xml.Namespaces;
 
 public class ChessAnalyzer3 extends ChessAnalyzer {
@@ -35,11 +33,13 @@ public class ChessAnalyzer3 extends ChessAnalyzer {
 				result =  ChessAnalyzer3.predictMovesSingleThreaded(board, depth);
 			} else {
 				System.out.println("going to use webservice");
-				result = useWebService(reducedXfen, depth, board);
+				result = this.useWebService(reducedXfen, depth, board);
 			}
-		} catch (MalformedURLException | SQLException e) {
-			// TODO Auto-generated catch block
+		} catch (MalformedURLException | SQLException | WebServiceException e) {
+			
 			e.printStackTrace();
+			
+			throw new AssertionError();
 		}
 
 		return result;
@@ -54,7 +54,7 @@ public class ChessAnalyzer3 extends ChessAnalyzer {
 	}
 
 
-	private final MovePrediction useWebService(final String reducedXfen,final int depth, final Board<ChessPieceType> board) throws MalformedURLException,SQLException {
+	private final MovePrediction useWebService(final String reducedXfen,final int depth, final Board<ChessPieceType> board) throws MalformedURLException, SQLException {
 		final MovePrediction result;
 
 

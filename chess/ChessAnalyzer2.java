@@ -27,7 +27,31 @@ public class ChessAnalyzer2 extends ChessAnalyzer {
 	public ChessAnalyzer2() {
 		super();
 	}
-	
+	/**
+	 *  ------ xfen: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+	 *   
+	 *   Single Threaded Implementierung:
+	 *   
+	 *   Suchetiefe 4: 769ms, 749ms, 800ms, 780ms, 824ms -> 784.4 ms
+	 *   
+	 *   Suchetiefe 5: 6002ms, 5900ms, 5791ms, 6012ms, 5953ms -> 5931.6 ms
+	 *   
+	 *   Suchetiefe 6: 129338ms, 129030ms, 128927ms, 127996ms, 127346ms -> 128527 ms
+	 *   
+	 *   Multi Threaded Implementierung:
+	 *   
+	 *   Suchetiefe 4: 757ms, 725ms, 760ms, 715ms, 725ms -> 736.4 ms - Gewinn: 6.5%
+	 *   
+	 *   Suchetiefe 5: 3829ms, 4034ms, 3785ms, 3774ms, 3944ms -> 3867.8 ms - Gewinn: 34.8%
+	 *   
+	 *   Suchetiefe 6: 72211ms, 71478ms, 71792ms, 72007ms, 70996ms -> 71696.8 ms - Gewinn: 44.2 %
+	 *   
+	 *   Wir haben schon mit einer Suchtiefe von 4 einen kleine Gewinn und mit grosseren Suchtiefen steigt den Gewinn auf.
+	 *   Die Fixkosten sowie Kosten für erzeugen und zerstören von Threads sind beeinflussen deutlich weniger in diesem Implementierung.
+	 *   
+	 * 
+	 * 
+	 */
 	public MovePrediction predictMoves (final Board<ChessPieceType> board, final int depth) {
 		
 		return predictMovesMultiThreaded(board, depth);

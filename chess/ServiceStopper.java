@@ -16,34 +16,51 @@ import de.sb.javase.io.SocketAddress;
 public final class ServiceStopper {
 
 	private static final String PROTOCOL_IDENTIFIER = "CSP";
+	
+	private final InetSocketAddress serviceAddress;
 
-	public static void main(final String[] args) throws IOException {
-		
-		final InetSocketAddress serviceAddress = new SocketAddress(args[0]).toInetSocketAddress();
-		
-		final Socket connection = new Socket(serviceAddress.getHostName(), serviceAddress.getPort());
+
+	
+	public ServiceStopper (final InetSocketAddress serviceAddress) {
+		if (serviceAddress == null) throw new NullPointerException();
+		this.serviceAddress = serviceAddress;
+	}
+	
+	private void stop(final String password) throws IOException {
+		try (Socket connection = this.getConnection())  {
+			final DataInputStream dataSource = new DataInputStream(connection.getInputStream());
+			final DataOutputStream dataSink = new DataOutputStream(new BufferedOutputStream(connection.getOutputStream()));
+			
+			dataSink.writeUTF(password);
+			dataSink.flush();
+			
+			String response = dataSource.readUTF(); 
+			
+			switch(response) {
+			case "ok":
+				System.out.println("Server shuts down! The response was " +response );
+				break;
+			case "fail":
+				System.out.println("Server didn't shut down! The response was "+response);
+				break;				
+			default:
+				System.out.println("Unknown response: " + response);
+			}
+		} 
+	}
+	
+	private Socket getConnection () throws IOException {
+		final Socket connection = new Socket(this.serviceAddress.getHostName(), this.serviceAddress.getPort());
 		try {
 			final DataInputStream dataSource = new DataInputStream(connection.getInputStream());
 			final DataOutputStream dataSink = new DataOutputStream(new BufferedOutputStream(connection.getOutputStream()));
 
 			dataSink.writeChars(PROTOCOL_IDENTIFIER);
 			dataSink.flush();
-			
 			for (final char character : PROTOCOL_IDENTIFIER.toCharArray()) {
 				if (dataSource.readChar() != character) throw new ProtocolException();
 			}
-
-
-			dataSink.writeUTF(args[1]);
-			dataSink.flush();
-			
-			String response = dataSource.readUTF(); 
-
-			if(response.equals("ok")){
-				System.out.println("Server shuts down! The response was " +response );
-			}else if(response.equals("fail")){
-				System.out.println("Server didn't shut down! The response was "+response);
-			}
+			return connection;
 		} catch (final Exception exception) {
 			try {
 				connection.close();
@@ -51,12 +68,22 @@ public final class ServiceStopper {
 				exception.addSuppressed(nestedException);
 			}
 			throw exception;
-		} finally {
-			try {
-				connection.close();
-			} catch (final Exception exception) {
-				exception.addSuppressed(exception);
-			}
+		}
+	}
+	
+	public static void main(final String[] args) throws IOException {
+		
+		final InetSocketAddress serviceAddress = new SocketAddress(args[0]).toInetSocketAddress();
+		
+		final ServiceStopper client = new ServiceStopper(serviceAddress);
+		
+		final String password = args[1];
+				
+		try {
+			client.stop(password);			
+			
+		} catch (Exception e) {
+			e.printStackTrace();
 		}
 	
 	}

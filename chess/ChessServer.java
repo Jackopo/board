@@ -51,7 +51,6 @@ public class ChessServer implements ChessService, AutoCloseable {
 		/* for the START TRANSACTION command in jdbc */
 		this.jdbcConnector.getConnection().setAutoCommit(false);
 
-
 		// important
 		this.endpoint = Endpoint.create(SOAPBinding.SOAP11HTTP_BINDING, this);
 		this.endpoint.publish(this.serviceURI.toASCIIString());
@@ -132,8 +131,8 @@ public class ChessServer implements ChessService, AutoCloseable {
 				final Runnable runnable = new Runnable() {
 					public void run() {
 						try {
-							
-							final DataOutputStream dataOutputStream = new DataOutputStream(new BufferedOutputStream(connection.getOutputStream()));
+							final BufferedOutputStream bufferedByteSink = new BufferedOutputStream(connection.getOutputStream());
+							final DataOutputStream dataOutputStream = new DataOutputStream(bufferedByteSink);
 							final DataInputStream dataInputStream = new DataInputStream(connection.getInputStream());
 
 							// verify and acknowledge protocol
@@ -141,19 +140,19 @@ public class ChessServer implements ChessService, AutoCloseable {
 								if (dataInputStream.readChar() != character) throw new ProtocolException();
 							}
 							dataOutputStream.writeChars(PROTOCOL_IDENTIFIER);
-							dataOutputStream.flush();
+							bufferedByteSink.flush();
 
 							final String password = dataInputStream.readUTF();
 
 							if (stopPassword.equals(password)) {
 								stop = true;
 								dataOutputStream.writeUTF("ok");
-								dataOutputStream.flush();
+								
 							}else {
 								dataOutputStream.writeUTF("fail");
-								dataOutputStream.flush();
+								
 							}
-							
+							bufferedByteSink.flush();
 						} catch (Throwable e) {
 							e.printStackTrace();
 							try { e.printStackTrace(); } catch (final Throwable nestedException) {}

@@ -71,29 +71,27 @@ public class ChessConnector implements AutoCloseable {
 	}
 
 	public MovePrediction[] getMovePredictions (String xfen, short searchDepth) throws SQLException {
-		if ((xfen == null) || (searchDepth < 1 ) || (searchDepth == 0)) {
+		if ((xfen == null) || (searchDepth < 1 )) {
 			return null;
 		}
 
 		List<MovePrediction> movePredictions = new ArrayList<MovePrediction>();
 
-		synchronized(this.connection)  {
+		synchronized(this.getConnection())  {
 			try (PreparedStatement statement = this.connection.prepareStatement(SQL_SELECT_BETTER_OR_EQUAL_MOVES)) {
 				statement.setString(1, xfen);
 				statement.setInt(2, searchDepth);
 
 				try (ResultSet resultSet = statement.executeQuery()) {
-					int rating = 0;
 					List<short[]> moves = new ArrayList<short[]>();
-					while(resultSet.next()) {
-						rating = resultSet.getInt("rating");
+					while(resultSet.next()) {						
 						moves.add(new short[]{resultSet.getShort("source"), resultSet.getShort("sink")});
 					}
+					 
 					if (moves.size() > 0) {
-						MovePrediction movePrediction = new MovePrediction(rating);
+						MovePrediction movePrediction = new MovePrediction(resultSet.getInt("rating"));
 						movePrediction.getMoves().addAll(moves);
-						movePredictions.add(movePrediction);
-						
+						movePredictions.add(movePrediction);					
 						
 					}
 				}
@@ -119,7 +117,6 @@ public class ChessConnector implements AutoCloseable {
 		}
 		
 		
-		
 		synchronized(this.connection)  {
 			try (PreparedStatement statement = this.connection.prepareStatement(SQL_SELECT_WORST_MOVES)) {
 				statement.setString(1, xfen);
@@ -131,7 +128,7 @@ public class ChessConnector implements AutoCloseable {
 					}					
 				}					
 			} catch (SQLException e) {
-				// TODO Auto-generated catch block
+			
 				e.printStackTrace();
 			}
 		}
@@ -139,17 +136,18 @@ public class ChessConnector implements AutoCloseable {
 		for (short[] move : movePrediction.getMoves()) {
 			synchronized (this.connection) {
 				try (PreparedStatement statement = this.connection.prepareStatement(SQL_INSERT_MOVE)) {
-					//short[] move = movePrediction.getMoves().get(0);
+					
 					statement.setString(1, xfen);
 					statement.setShort(2, move[0]);
 					statement.setShort(3, move[1]);
 					statement.setInt(4, movePrediction.getRating());
 					statement.setInt(5, searchDepth);
-					if(statement.executeUpdate() != 1)  throw new IllegalStateException("failed to insert move!");				
+					if(statement.executeUpdate() != 1)  throw new IllegalStateException();				
 				} catch (SQLException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
-				} 
+				} catch(IllegalStateException e) {
+					System.out.println("failed to insert move!");
+				}
 			}
 		}
 
@@ -158,15 +156,19 @@ public class ChessConnector implements AutoCloseable {
 
 
 
-	public long deleteMovePrediction(long identity) throws SQLException {
-
-		System.out.println("identity " + identity);
-
+	public long deleteMovePrediction(long identity)  {
+				
 		synchronized (this.connection) {
 			try (PreparedStatement statement = this.connection.prepareStatement(SQL_DELETE_MOVE)) {
 				statement.setLong(1, identity);
-				if (statement.executeUpdate() != 1) throw new IllegalStateException("moveprediction removal failed.");
+				
+				if (statement.executeUpdate() != 1) throw new IllegalStateException();
+			} catch ( SQLException e) {
+				e.printStackTrace(); 
+			} catch(IllegalStateException e) {
+				System.out.println("moveprediction removal failed.");
 			}
+			
 		}
 
 		return identity;
